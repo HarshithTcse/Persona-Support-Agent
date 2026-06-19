@@ -32,6 +32,8 @@ if st.button("Submit"):
         reasoning = persona_result["reasoning"]
 
         retrieved = rag.retrieve_context(query)
+        st.write("DEBUG RETRIEVED:")
+        st.write(retrieved)
 
         escalated = should_escalate(
             query,
