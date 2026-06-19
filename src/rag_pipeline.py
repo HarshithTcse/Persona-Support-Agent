@@ -5,6 +5,12 @@ import chromadb
 from pypdf import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from src.rag_pipeline import (
+    LocalRAGPipeline,
+    load_documents,
+    chunk_documents
+)
+
 load_dotenv()
 
 def load_documents(data_folder="data"):
@@ -133,8 +139,12 @@ if __name__ == "__main__":
     chunks = chunk_documents(docs)
 
     rag = LocalRAGPipeline()
+    docs = load_documents()
+    chunks = chunk_documents(docs)
 
-    rag.ingest_chunks(chunks)
+    if rag.collection.count() == 0:
+        rag.ingest_chunks(chunks)
+
 
     query = "How do I reset my password?"
 
