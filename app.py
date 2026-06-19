@@ -79,3 +79,4 @@ if st.button("Submit"):
             st.subheader("Generated Response")
 
             st.write(response)
+            st.write("Collection Count:", rag.collection.count())
