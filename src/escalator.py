@@ -4,6 +4,8 @@ from datetime import datetime
 def should_escalate(query, retrieved_chunks):
 
     sensitive_keywords = [
+        "billing",
+        "refund",
         "legal",
         "lawsuit",
         "duplicate charge",
@@ -19,27 +21,14 @@ def should_escalate(query, retrieved_chunks):
         "fraud"
     ]
 
-    frustration_keywords = [
-        "nothing works",
-        "tried everything",
-        "still not working",
-        "frustrated",
-        "angry",
-        "fed up",
-        "urgent",
-        "immediately"
-    ]
-
     query_lower = query.lower()
 
+    # Sensitive issues -> escalate
     for keyword in sensitive_keywords:
         if keyword in query_lower:
             return True
 
-    for keyword in frustration_keywords:
-        if keyword in query_lower:
-            return True
-
+    # No relevant KB info found
     if len(retrieved_chunks) == 0:
         return True
 
