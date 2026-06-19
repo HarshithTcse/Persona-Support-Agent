@@ -5,22 +5,22 @@ import chromadb
 from pypdf import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from src.rag_pipeline import (
-    LocalRAGPipeline,
-    load_documents,
-    chunk_documents
-)
-
 load_dotenv()
+
 
 def load_documents(data_folder="data"):
     documents = []
 
+    if not os.path.exists(data_folder):
+        print(f"Folder '{data_folder}' not found.")
+        return documents
+
     for filename in os.listdir(data_folder):
+
         filepath = os.path.join(data_folder, filename)
 
-        # Read Markdown and Text files
-        if filename.endswith(".md") or filename.endswith(".txt"):
+        if filename.endswith(".txt") or filename.endswith(".md"):
+
             with open(filepath, "r", encoding="utf-8") as f:
                 text = f.read()
 
@@ -29,21 +29,30 @@ def load_documents(data_folder="data"):
                 "content": text
             })
 
-        # Read PDF files
         elif filename.endswith(".pdf"):
-            reader = PdfReader(filepath)
 
-            for page_num, page in enumerate(reader.pages):
-                text = page.extract_text()
+            try:
+                reader = PdfReader(filepath)
 
-                documents.append({
-                    "source": filename,
-                    "page": page_num + 1,
-                    "content": text
-                })
+                for page_num, page in enumerate(reader.pages):
+
+                    text = page.extract_text()
+
+                    if text:
+                        documents.append({
+                            "source": filename,
+                            "page": page_num + 1,
+                            "content": text
+                        })
+
+            except Exception as e:
+                print(f"Error reading PDF {filename}: {e}")
 
     return documents
+
+
 def chunk_documents(documents):
+
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=400,
         chunk_overlap=40
@@ -53,7 +62,9 @@ def chunk_documents(documents):
 
     for doc in documents:
 
-        split_texts = splitter.split_text(doc["content"])
+        split_texts = splitter.split_text(
+            doc["content"]
+        )
 
         for idx, text in enumerate(split_texts):
 
@@ -64,6 +75,7 @@ def chunk_documents(documents):
             })
 
     return chunks
+
 
 class LocalRAGPipeline:
 
@@ -77,18 +89,30 @@ class LocalRAGPipeline:
             path="./chroma_db"
         )
 
-        self.collection = self.chroma_client.get_or_create_collection(
-            name="support_kb"
+        self.collection = (
+            self.chroma_client.get_or_create_collection(
+                name="support_kb"
+            )
         )
 
     def get_embedding(self, text):
 
-        response = self.client.models.embed_content(
-            model="gemini-embedding-001",
-            contents=text
-        )
+        try:
 
-        return response.embeddings[0].values
+            response = self.client.models.embed_content(
+                model="gemini-embedding-001",
+                contents=text
+            )
+
+            if response.embeddings:
+                return response.embeddings[0].values
+
+            return []
+
+        except Exception as e:
+
+            print(f"Embedding Error: {e}")
+            return []
 
     def ingest_chunks(self, chunks):
 
@@ -98,60 +122,112 @@ class LocalRAGPipeline:
                 chunk["content"]
             )
 
+            if not embedding:
+                continue
+
             try:
+
                 self.collection.add(
-                    ids=[f"chunk_{i}"],
+                    ids=[
+                        f"{chunk['source']}_{i}"
+                    ],
                     embeddings=[embedding],
-                    documents=[chunk["content"]],
+                    documents=[
+                        chunk["content"]
+                    ],
                     metadatas=[{
                         "source": chunk["source"]
                     }]
                 )
-            except:
-                pass
+
+            except Exception:
+                continue
 
         print("Knowledge Base Indexed Successfully")
 
-    def retrieve_context(self, query, top_k=3):
+    def retrieve_context(
+        self,
+        query,
+        top_k=3
+    ):
 
-        query_embedding = self.get_embedding(query)
-
-        results = self.collection.query(
-            query_embeddings=[query_embedding],
-            n_results=top_k
+        query_embedding = self.get_embedding(
+            query
         )
 
-        retrieved_chunks = []
+        if not query_embedding:
+            return []
 
-        for i in range(len(results["documents"][0])):
+        try:
 
-            retrieved_chunks.append({
-                "content": results["documents"][0][i],
-                "source": results["metadatas"][0][i]["source"]
-            })
+            results = self.collection.query(
+                query_embeddings=[
+                    query_embedding
+                ],
+                n_results=top_k
+            )
 
-        return retrieved_chunks
+            if not results["documents"]:
+                return []
+
+            retrieved_chunks = []
+
+            for i in range(
+                len(results["documents"][0])
+            ):
+
+                retrieved_chunks.append({
+                    "content":
+                    results["documents"][0][i],
+
+                    "source":
+                    results["metadatas"][0][i]["source"]
+                })
+
+            return retrieved_chunks
+
+        except Exception as e:
+
+            print(f"Retrieval Error: {e}")
+            return []
+
 
 if __name__ == "__main__":
 
     docs = load_documents()
 
+    print(
+        f"Loaded {len(docs)} documents"
+    )
+
     chunks = chunk_documents(docs)
+
+    print(
+        f"Created {len(chunks)} chunks"
+    )
 
     rag = LocalRAGPipeline()
-    docs = load_documents()
-    chunks = chunk_documents(docs)
 
     if rag.collection.count() == 0:
+
         rag.ingest_chunks(chunks)
 
+    query = (
+        "How do I reset my password?"
+    )
 
-    query = "How do I reset my password?"
-
-    results = rag.retrieve_context(query)
+    results = rag.retrieve_context(
+        query
+    )
 
     print("\nRetrieved Chunks:\n")
 
     for item in results:
-        print(item)
-        print("-" * 24)
+
+        print(
+            f"Source: {item['source']}"
+        )
+
+        print(item["content"])
+
+        print("-" * 50)
