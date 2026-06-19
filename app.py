@@ -6,16 +6,28 @@ from src.escalator import (
     should_escalate,
     generate_handoff_summary
 )
-from src.rag_pipeline import LocalRAGPipeline
+from src.rag_pipeline import (
+    LocalRAGPipeline,
+    load_documents,
+    chunk_documents
+)
 
 st.set_page_config(
     page_title="Persona Support Agent",
     page_icon="🤖"
 )
 
-st.title("Persona-Adaptive Customer Support Agent")
+st.title("🤖 Persona-Adaptive Customer Support Agent")
 
 rag = LocalRAGPipeline()
+
+# Build knowledge base automatically if empty
+if rag.collection.count() == 0:
+    docs = load_documents()
+    chunks = chunk_documents(docs)
+    rag.ingest_chunks(chunks)
+
+st.write(f"Knowledge Base Documents: {rag.collection.count()}")
 
 query = st.text_area(
     "Enter Customer Query"
@@ -25,20 +37,20 @@ if st.button("Submit"):
 
     if query.strip():
 
-        persona_result = classify_persona(query)
+        with st.spinner("Analyzing customer query..."):
 
-        persona = persona_result["persona"]
-        confidence = persona_result["confidence"]
-        reasoning = persona_result["reasoning"]
+            persona_result = classify_persona(query)
 
-        retrieved = rag.retrieve_context(query)
-        st.write("DEBUG RETRIEVED:")
-        st.write(retrieved)
+            persona = persona_result["persona"]
+            confidence = persona_result["confidence"]
+            reasoning = persona_result["reasoning"]
 
-        escalated = should_escalate(
-            query,
-            retrieved
-        )
+            retrieved = rag.retrieve_context(query)
+
+            escalated = should_escalate(
+                query,
+                retrieved
+            )
 
         st.subheader("Detected Persona")
         st.success(persona)
@@ -51,12 +63,20 @@ if st.button("Submit"):
 
         st.subheader("Retrieved Sources")
 
-        for item in retrieved:
-            st.write(f"• {item['source']}")
+        if retrieved:
+
+            for item in retrieved:
+                st.write(f"📄 Source: {item['source']}")
+
+                if "content" in item:
+                    st.caption(item["content"][:200] + "...")
+
+        else:
+            st.warning("No documents retrieved.")
 
         if escalated:
 
-            st.error("ESCALATION REQUIRED")
+            st.error("⚠️ ESCALATION REQUIRED")
 
             st.subheader("Human Handoff Summary")
 
@@ -70,13 +90,23 @@ if st.button("Submit"):
 
         else:
 
-            response = generate_response(
-                query,
-                persona,
-                retrieved
-            )
+            try:
 
-            st.subheader("Generated Response")
+                response = generate_response(
+                    query,
+                    persona,
+                    retrieved
+                )
 
-            st.write(response)
-            st.write("Collection Count:", rag.collection.count())
+                st.subheader("Generated Response")
+                st.write(response)
+
+            except Exception as e:
+
+                st.error(
+                    f"Response generation failed: {str(e)}"
+                )
+
+    else:
+
+        st.warning("Please enter a customer query.")
