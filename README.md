@@ -271,8 +271,8 @@ The app will be available at `http://localhost:8501`.
 
 ## Demo
 
-📹 Screen recording: `<insert Loom/YouTube link here>`
-🔗 Live app (if deployed): `<insert Streamlit Cloud link here>`
+📹 Screen recording: `https://drive.google.com/file/d/1dTmNaNh7AKUKiyylNNevPIk5vciFW_U_/view?usp=drive_link`
+🔗 Live app (if deployed): `https://persona-support-agent-qcxyznbfjzjmienxgyszuw.streamlit.app/`
 
 ---
 
